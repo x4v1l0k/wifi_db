@@ -14,6 +14,8 @@ import subprocess
 # import platform
 import binascii
 import datetime
+from cryptography import x509
+from cryptography.hazmat.backends import default_backend
 
 
 def parse_netxml(ouiMap, name, database, verbose):
@@ -373,9 +375,92 @@ def parse_cap(name, database, verbose, hcxpcapngtool, tshark):
         parse_WPS(name, database, verbose)
         parse_identities(name, database, verbose)
         parse_MFP(name, database, verbose)
+        parse_certificates(name, database, verbose)
     if hcxpcapngtool:
         exec_hcxpcapngtool(name, database, verbose)
 
+# Get certificates information from .cap
+def extract_certificates(pkt):
+    certs = []
+    try:
+        cert_list = pkt.eap.tls_handshake_certificate.split(',')
+        for cert_hex in cert_list:
+            cert_data = bytes.fromhex(cert_hex.replace(':', ''))
+            cert = x509.load_der_x509_certificate(cert_data, default_backend())
+            certs.append(cert)
+    except Exception as e:
+        print(f"Error extracting certificates: {e}")
+    return certs
+
+def extract_emails_from_cert(cert_obj):
+    return {
+        'subject': [email.value for email in cert_obj.subject.get_attributes_for_oid(x509.NameOID.EMAIL_ADDRESS)],
+        'issuer': [email.value for email in cert_obj.issuer.get_attributes_for_oid(x509.NameOID.EMAIL_ADDRESS)]
+    }
+
+def parse_certificates(name, database, verbose):
+    try:
+        cursor = database.cursor()
+        certs_info = []
+        errors = 0
+        file = name
+        cap = pyshark.FileCapture(file, display_filter="tls.handshake.type == 11")
+
+        for pkt in cap:
+            #bssid = pkt.wlan.bssid if hasattr(pkt, 'wlan') else 'Unknown'
+            src = pkt.wlan.ta
+            dst = pkt.wlan.da
+            cert_objs = extract_certificates(pkt)
+            for cert_obj in cert_objs:
+                emails = extract_emails_from_cert(cert_obj)
+                cert_info = {
+                    'source': src,
+                    'destination': dst,
+                    'issuer': {
+                        'commonName': cert_obj.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value 
+                            if cert_obj.issuer.get_attributes_for_oid(x509.NameOID.COMMON_NAME) else '',
+                        'countryName': cert_obj.issuer.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)[0].value 
+                            if cert_obj.issuer.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME) else '',
+                        'email': emails['issuer'][0] if emails['issuer'] else '',
+                        'localityName': cert_obj.issuer.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME)[0].value 
+                            if cert_obj.issuer.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME) else '',
+                        'organizationName': cert_obj.issuer.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)[0].value 
+                            if cert_obj.issuer.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME) else '',
+                        'stateOrProvinceName': cert_obj.issuer.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME)[0].value 
+                            if cert_obj.issuer.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME) else '',
+                    },
+                    'subject': {
+                        'commonName': cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME)[0].value 
+                            if cert_obj.subject.get_attributes_for_oid(x509.NameOID.COMMON_NAME) else '',
+                        'countryName': cert_obj.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME)[0].value 
+                            if cert_obj.subject.get_attributes_for_oid(x509.NameOID.COUNTRY_NAME) else '',
+                        'email': emails['subject'][0] if emails['subject'] else '',
+                        'localityName': cert_obj.subject.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME)[0].value 
+                            if cert_obj.subject.get_attributes_for_oid(x509.NameOID.LOCALITY_NAME) else '',
+                        'organizationName': cert_obj.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME)[0].value 
+                            if cert_obj.subject.get_attributes_for_oid(x509.NameOID.ORGANIZATION_NAME) else '',
+                        'stateOrProvinceName': cert_obj.subject.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME)[0].value 
+                            if cert_obj.subject.get_attributes_for_oid(x509.NameOID.STATE_OR_PROVINCE_NAME) else '',
+                    }
+                }
+                if cert_info not in certs_info:
+                    certs_info.append(cert_info)
+                    if verbose:
+                        print("Certificate information:", cert_info)
+                    errors += database_utils.insertCertificate(cursor,
+                                                            verbose,
+                                                            cert_info,
+                                                            file)
+        database.commit()
+    except pyshark.capture.capture.TSharkCrashException as error:
+        errors += 1
+        print("Error in parse_certificates (CAP), probably PCAP cut in the "
+              "middle of a packet: ", error)
+        print(".cap Certificates done, errors", errors)
+    except Exception as error:
+        errors += 1
+        print("Error in parse_certificates (CAP): ", error)
+        print(".cap Certificates done, errors", errors)
 
 # Get handshakes from .cap
 def parse_handshakes(name, database, verbose):

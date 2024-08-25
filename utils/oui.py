@@ -45,7 +45,7 @@ def load_vendors():
                             "Sec-Fetch-Mode": "navigate",
                             "Sec-Fetch-Site": "none", "Sec-Fetch-User": "?1",
                             "Te": "trailers"}
-                response = requests.get(url, headers=headersR, timeout=5)
+                response = requests.get(url, headers=headersR)
                 tmp.write(response.content)
                 tmp.seek(0)
 

@@ -365,6 +365,25 @@ def insertMFP(cursor, verbose, bssid, mfpc, mfpr, file):
 
         return int(1)
 
+def insertCertificate(cursor, verbose, cert_info, file):
+    try:
+        error = 0
+        # Insert file
+        error += insertFile(cursor, verbose, file)
+
+        cursor.execute(
+            '''INSERT INTO certificate VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (cert_info['source'], cert_info['destination'], file, cert_info['issuer']['commonName'], cert_info['issuer']['countryName'], cert_info['issuer']['email'], cert_info['issuer']['localityName'], cert_info['issuer']['organizationName'], cert_info['issuer']['stateOrProvinceName'], cert_info['subject']['commonName'], cert_info['subject']['countryName'], cert_info['subject']['email'], cert_info['subject']['localityName'], cert_info['subject']['organizationName'], cert_info['subject']['stateOrProvinceName']))
+        return int(error)
+    except sqlite3.IntegrityError as error:
+        # errors += 1
+        if verbose:
+            print("insertCertificate" + str(error))
+        return int(0)
+    except sqlite3.Error as error:
+        if verbose:
+            print("insertCertificate Error " + str(error))
+        return int(1)
 
 def insertHandshake(cursor, verbose, bssid, mac, file):
     ''''''

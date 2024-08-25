@@ -92,6 +92,26 @@ CREATE TABLE IF NOT EXISTS Probe
     CONSTRAINT ProbesSent FOREIGN KEY (mac) REFERENCES Client (mac) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS Certificate
+(
+    source TEXT NOT NULL,
+    destination TEXT NOT NULL,
+    file TEXT NOT NULL,
+    issuer_commonName TEXT NOT NULL,
+    issuer_countryName TEXT NOT NULL,
+    issuer_email TEXT NOT NULL,
+    issuer_localityName TEXT NOT NULL,
+    issuer_organizationName TEXT NOT NULL,
+    issuer_stateOrProvinceName TEXT NOT NULL,
+    subject_commonName TEXT NOT NULL,
+    subject_countryName TEXT NOT NULL,
+    subject_email TEXT NOT NULL,
+    subject_localityName TEXT NOT NULL,
+    subject_organizationName TEXT NOT NULL,
+    subject_stateOrProvinceName TEXT NOT NULL,
+    CONSTRAINT Key5 PRIMARY KEY (source,destination,file,issuer_commonName,issuer_countryName,issuer_email,issuer_localityName,issuer_organizationName,issuer_stateOrProvinceName,subject_commonName,subject_countryName,subject_email,subject_localityName,subject_organizationName,subject_stateOrProvinceName)
+);
+
 
 CREATE TABLE IF NOT EXISTS Handshake
 (
